@@ -1,0 +1,276 @@
+package com.example.contactmanager // Ganti dengan nama package proyek Anda
+
+    import android.os.Bundle
+    import android.widget.Toast
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.compose.foundation.ExperimentalFoundationApi
+    import androidx.compose.foundation.combinedClickable
+    import androidx.compose.foundation.layout.*
+    import androidx.compose.foundation.lazy.LazyColumn
+    import androidx.compose.foundation.lazy.items
+    import androidx.compose.material.*
+    import androidx.compose.material.icons.Icons
+    import androidx.compose.material.icons.filled.Add
+    import androidx.compose.runtime.*
+    import androidx.compose.runtime.saveable.rememberSaveable
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.platform.LocalContext
+    import androidx.compose.ui.unit.dp
+    import androidx.navigation.NavController
+    import androidx.navigation.NavType
+    import androidx.navigation.compose.NavHost
+    import androidx.navigation.compose.composable
+    import androidx.navigation.compose.rememberNavController
+    import androidx.navigation.navArgument
+
+    // =========================================================================
+    // I. DATA STRUCTURE AND REPOSITORY (MIMICKING COMPANION OBJECT)
+    // =========================================================================
+
+    /**
+    * Data Class untuk merepresentasikan sebuah Kontak.
+    */
+    data class Contact(
+    val id: Long,
+    var name: String,
+    var address: String,
+    var phone: String,
+    var email: String
+    )
+
+    /**
+    * [cite_start]Global Singleton Object (Mirip dengan Companion Object) untuk menyimpan nilai. [cite: 138]
+    * Nilai dipertahankan selama aplikasi berjalan (across recomposition),
+    * [cite_start]tetapi akan hilang setelah aplikasi ditutup. [cite: 137, 140]
+    */
+    object ContactRepository {
+    // Menggunakan mutableStateListOf untuk memicu recomposition di List Contact Screen
+    private val _contacts = mutableStateListOf<Contact>()
+    private var nextId = 1L
+
+    // Data inisial
+    init {
+    addContact(
+    "Alice Smith",
+    "Jalan Raya Cendrawasih Nomor Lima Puluh Dua Belas", // > 5 kata
+    "081234567890",
+    "alice@example.com"
+    )
+    addContact(
+    "Budi Santoso",
+    "Komplek Griya Indah Blok C Sepuluh Tiga Ratus", // > 5 kata
+    "085555444333",
+    "budi@mail.com"
+    )
+    }
+
+    fun getAllContacts(): List<Contact> = _contacts
+
+        // Tambah Kontak Baru
+        fun addContact(name: String, address: String, phone: String, email: String) {
+        val newContact = Contact(nextId++, name, address, phone, email)
+        _contacts.add(newContact)
+        }
+
+        // Edit Kontak yang Sudah Ada
+        fun editContact(contactId: Long, name: String, address: String, phone: String, email: String) {
+        val index = _contacts.indexOfFirst { it.id == contactId }
+        if (index != -1) {
+        _contacts[index] = _contacts[index].copy(
+        name = name,
+        address = address,
+        phone = phone,
+        email = email
+        )
+        }
+        }
+
+        fun getContactById(id: Long): Contact? = _contacts.find { it.id == id }
+        }
+
+        // =========================================================================
+        // II. NAVIGATION ENUM
+        // =========================================================================
+
+        sealed class Screen(val route: String) {
+        // List contact Screen
+        object ListContact : Screen("list_contact")
+
+        // Add / Edit Contact Screen
+        object AddEditContact : Screen("add_edit_contact/{contactId}") {
+        [cite_start]// Navigasi untuk Add Contact Screen [cite: 119]
+        fun createAddRoute() = "add_edit_contact/-1"
+
+        [cite_start]// Navigasi untuk Edit Contact Screen [cite: 134, 135]
+        fun createEditRoute(contactId: Long) = "add_edit_contact/$contactId"
+        }
+        }
+
+        // =========================================================================
+        // III. MAIN ACTIVITY (SETUP NAVIGASI)
+        // =========================================================================
+
+        class MainActivity : ComponentActivity() {
+        override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+        MaterialTheme {
+        val navController = rememberNavController()
+        NavHost(
+        navController = navController,
+        [cite_start]startDestination = Screen.ListContact.route // Default Widget once the app is opened [cite: 114]
+        ) {
+        // List Contact Screen
+        composable(Screen.ListContact.route) {
+        ListContactScreen(navController = navController)
+        }
+
+        // Add / Edit Contact Screen
+        composable(
+        route = Screen.AddEditContact.route,
+        arguments = listOf(navArgument("contactId") { type = NavType.LongType })
+        ) { backStackEntry ->
+        val contactId = backStackEntry.arguments?.getLong("contactId")
+        AddEditContactScreen(navController = navController, contactId = contactId)
+        }
+        }
+        }
+        }
+        }
+        }
+
+        // =========================================================================
+        // IV. COMPOSE SCREENS
+        // =========================================================================
+
+        // --- A. List Contact Screen ---
+        @Composable
+        @OptIn(ExperimentalFoundationApi::class)
+        fun ListContactScreen(navController: NavController) {
+        [cite_start]val contacts = ContactRepository.getAllContacts() // Showing Contact List [cite: 115]
+
+        Scaffold(
+        topBar = {
+        [cite_start]TopAppBar(title = { Text("Dashboard") }) // App Bar with a Text: Dashboard [cite: 121]
+        },
+        floatingActionButton = {
+        FloatingActionButton(
+        onClick = {
+        [cite_start]// Will switch to the Add Contact Screen [cite: 119]
+        navController.navigate(Screen.AddEditContact.createAddRoute())
+        },
+        modifier = Modifier.size(56.dp)
+        ) {
+        Icon(Icons.Filled.Add, contentDescription = "Add Contact")
+        }
+        [cite_start]}, // There is floating action button on the bottom right corner [cite: 118]
+        floatingActionButtonPosition = FabPosition.End
+        ) { padding ->
+        if (contacts.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Text("No contacts added yet.")
+        }
+        } else {
+        LazyColumn(contentPadding = padding) {
+        items(contacts, key = { it.id }) { contact ->
+        ContactListItem(
+        contact = contact,
+        onLongClick = {
+        [cite_start]// If we long pressed on certain row [cite: 134]
+        [cite_start]// Will open Edit Contact Screen (share UI with Add Contact Screen) [cite: 135]
+        navController.navigate(Screen.AddEditContact.createEditRoute(contact.id))
+        }
+        )
+        }
+        }
+        }
+        }
+        }
+
+        @Composable
+        @OptIn(ExperimentalFoundationApi::class)
+        fun ContactListItem(contact: Contact, onLongClick: () -> Unit) {
+        Column(
+        modifier = Modifier
+        .fillMaxWidth()
+        .combinedClickable(
+        onClick = { /* Short click: not specified */ },
+        onLongClick = onLongClick
+        )
+        .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+        [cite_start]Text(text = contact.name, style = MaterialTheme.typography.h6) // Contact name [cite: 116]
+        Spacer(Modifier.height(4.dp))
+        [cite_start]Text(text = contact.address, style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)) // Contact address [cite: 116]
+        [cite_start]// Contact address must at least 5 words (Validasi di screen Add/Edit) [cite: 117]
+        Divider(modifier = Modifier.padding(top = 8.dp))
+        }
+        }
+
+        // --- B. Add / Edit Contact Screen ---
+        @Composable
+        fun AddEditContactScreen(navController: NavController, contactId: Long?) {
+        val context = LocalContext.current
+
+        val isEditMode = contactId != null && contactId != -1L
+        val contactToEdit = remember(contactId) {
+        if (isEditMode) ContactRepository.getContactById(contactId!!) else null
+        }
+
+        [cite_start]// Form fields will be pre-filled with contact data [cite: 136]
+        [cite_start]var name by rememberSaveable { mutableStateOf(contactToEdit?.name ?: "") } // Name [cite: 124]
+        [cite_start]var address by rememberSaveable { mutableStateOf(contactToEdit?.address ?: "") } // Address [cite: 125]
+        [cite_start]var phone by rememberSaveable { mutableStateOf(contactToEdit?.phone ?: "") } // Phone [cite: 126]
+        [cite_start]var email by rememberSaveable { mutableStateOf(contactToEdit?.email ?: "") } // Email [cite: 127]
+
+        Scaffold(
+        topBar = {
+        TopAppBar(title = { Text(if (isEditMode) "Edit Contact" else "Add New Contact") })
+        }
+        ) { padding ->
+        Column(
+        modifier = Modifier
+        .fillMaxSize()
+        .padding(padding)
+        .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+        // TextFields
+        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = address, onValueChange = { address = it }, label = { Text("Address (Min 5 words)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Phone") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
+
+        Spacer(Modifier.height(8.dp))
+
+        [cite_start]// Add Button [cite: 129]
+        Button(
+        onClick = {
+        val trimmedAddress = address.trim()
+        [cite_start]// When pressed check for the address must be at least 5 words [cite: 130]
+        val wordCount = trimmedAddress.split("\\s+".toRegex()).count { it.isNotEmpty() }
+
+        if (wordCount < 5) {
+        Toast.makeText(context, "Address must be at least 5 words. Current: $wordCount.", Toast.LENGTH_LONG).show()
+        } else if (name.isBlank() || trimmedAddress.isBlank() || phone.isBlank() || email.isBlank()) {
+        Toast.makeText(context, "All fields are required.", Toast.LENGTH_LONG).show()
+        } else {
+        // Logika Simpan/Update
+        if (isEditMode) {
+        ContactRepository.editContact(contactToEdit!!.id, name, address, phone, email)
+        } else {
+        ContactRepository.addContact(name, address, phone, email)
+        }
+
+        [cite_start]// Return to List Contact Screen with updated information [cite: 131]
+        navController.popBackStack()
+        }
+        },
+        modifier = Modifier.fillMaxWidth()
+        ) {
+        Text(if (isEditMode) "Save Changes" else "Add Contact")
+        }
+        }
+        }
+        }
