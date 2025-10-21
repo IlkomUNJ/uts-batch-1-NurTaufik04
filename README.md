@@ -6,5 +6,5 @@ NIM  : 1313623007
 
 Class: Ilmu Komputer 2023 A
 
-Gemini Prompt History: https://gemini.google.com/share/3b0f2da25aab
+Gemini Prompt History: https://gemini.google.com/share/b35d0a6322ee
 
